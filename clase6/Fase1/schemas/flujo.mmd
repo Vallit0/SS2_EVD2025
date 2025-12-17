@@ -1,0 +1,76 @@
+flowchart TD
+  %% === SETUP DE PROYECTO E IAM ===
+  A0([Inicio])
+  A1[Seleccionar o crear PROJECT_ID en GCP]
+  A2[Habilitar BigQuery API]
+  A3[Asignar IAM a integrantes - viewer, bigquery.jobUser, bigquery.user]
+  A4[Crear DATASET_ID region US]
+  A5[Otorgar permisos dataset - bigquery.dataOwner]
+  A0 --> A1 --> A2 --> A3 --> A4 --> A5
+
+  %% === PRUEBAS INICIALES SOBRE DATASET PUBLICO ===
+  B1[Probar acceso a dataset publico NYC taxi trips 2022]
+  B2[Inspeccionar columnas, tipos, nulos, rango de fechas]
+  B3{Acceso y datos validos?}
+  B4[Corregir permisos, region o consulta]
+  A5 --> B1 --> B2 --> B3
+  B3 -->|No| B4 --> B1
+  B3 -->|Si| C1
+
+  %% === TABLA BASE OPTIMIZADA ===
+  subgraph S1 [Derivacion y optimizacion en BigQuery]
+    C1[Crear TABLE_base limpia con filtros de calidad]
+    C2[Partition por fecha usando DATE function timestamp_col]
+    C3[Cluster por columnas de consulta ej zona y metodo pago]
+    C4[Verificar particiones con INFORMATION_SCHEMA.PARTITIONS]
+    C5[Comparar bytes con y sin filtro de fecha]
+  end
+  B3 --> C1 --> C2 --> C3 --> C4 --> C5
+
+  %% === TABLAS DERIVADAS POR CASO DE USO ===
+  subgraph S2 [Tablas derivadas especificas]
+    D1[Crear TABLE_hourly - demanda por hora y fecha - partition por fecha - cluster por zona y hora]
+    D2[Crear TABLE_monthly - kpis por mes - partition por mes - cluster por categoria]
+    D3[Crear TABLE_tips - buckets de propinas por mes - partition por mes - cluster por bucket]
+    D4[Verificar esquema, particiones y clustering]
+  end
+  C5 --> D1 --> D2 --> D3 --> D4
+
+  %% === METRICAS DE EJECUCION Y COSTO ===
+  subgraph S3 [Metrica de ejecucion y costo]
+    E1[Desactivar cache para medicion]
+    E2[Estimar bytes en editor o dry_run por CLI]
+    E3[Configurar maximum bytes billed]
+    E4[Opcional usar EXPLAIN para plan estimado]
+    E5[Capturar Job info y Execution details y Graph]
+  end
+  D4 --> E1 --> E2 --> E3 --> E4 --> E5
+
+  %% === CONSULTAS EXPLORATORIAS ===
+  subgraph S4 [Analisis exploratorio]
+    F1[Serie temporal con TABLE_monthly]
+    F2[Metodos de pago con TABLE_monthly]
+    F3[Distribucion de propinas con TABLE_tips]
+    F4[Demanda por hora con TABLE_hourly]
+    F5[Top zonas con TABLE_base]
+  end
+  E5 --> F1 --> F2 --> F3 --> F4 --> F5
+
+  %% === VISUALIZACION EN LOOKER STUDIO ===
+  subgraph S5 [Dashboard en Looker Studio]
+    G1[Conectar fuentes TABLE_monthly, TABLE_hourly, TABLE_tips, TABLE_base]
+    G2[Configurar filtros globales fecha, zona, metodo pago, bucket]
+    G3[Construir pagina ejecutiva KPIs, serie mensual, pagos, propinas]
+    G4[Construir pagina operativa hora x zona, top zonas]
+    G5{Grafico muestra No Data?}
+    G6[Revisar rango de fechas, campo de fecha, filtros, fuente correcta]
+  end
+  F5 --> G1 --> G2 --> G3 --> G4 --> G5
+  G5 -->|Si| G6 --> G2
+  G5 -->|No| H1
+
+  %% === DOCUMENTACION Y ENTREGA ===
+  H1[Documentar README decisiones de particion y cluster, bytes antes y despues, queries y hallazgos]
+  H2[Compartir dashboard y repositorio]
+  H3([Fin Fase 1])
+  H1 --> H2 --> H3
