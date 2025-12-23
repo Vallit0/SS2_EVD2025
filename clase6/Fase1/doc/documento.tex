@@ -1,0 +1,329 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+% Paquetes esenciales
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{url}
+\usepackage{listings}
+\usepackage{subcaption}
+\usepackage{float}
+
+% Configuración para código SQL
+\lstdefinestyle{sqlstyle}{
+    language=SQL,
+    basicstyle=\ttfamily\footnotesize,
+    keywordstyle=\color{blue}\bfseries,
+    commentstyle=\color{green},
+    stringstyle=\color{red},
+    numberstyle=\tiny\color{gray},
+    numbers=left,
+    breaklines=true,
+    showstringspaces=false,
+    tabsize=2,
+    frame=single,
+    captionpos=b
+}
+
+\lstset{style=sqlstyle}
+
+% Definir comando para métricas
+\newcommand{\metric}[2]{\textbf{#1}: #2}
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\begin{document}
+
+\title{Optimización de Consultas BigQuery: Análisis de Performance y Costo en Dataset NYC Taxi Trips\\
+{\footnotesize \textnormal{Implementación de Estrategias de Particionamiento y Clustering}}}
+
+\author{\IEEEauthorblockN{[Tu Nombre]}
+\IEEEauthorblockA{\textit{[Departamento/Área]} \\
+\textit{[Institución/Empresa]}\\
+[Ciudad, País] \\
+[email@dominio.com]}
+\and
+\IEEEauthorblockN{[Nombre Colaborador]}
+\IEEEauthorblockA{\textit{[Departamento/Área]} \\
+\textit{[Institución/Empresa]}\\
+[Ciudad, País] \\
+[email@dominio.com]}
+}
+
+\maketitle
+
+\begin{abstract}
+Este trabajo presenta un análisis sistemático de optimización de consultas en Google BigQuery utilizando el dataset público NYC Taxi Trips. Se implementaron estrategias de particionamiento temporal y clustering por columnas clave para reducir costos de procesamiento y mejorar el rendimiento. Los resultados muestran una reducción promedio del XX\% en bytes procesados y mejoras del XX\% en tiempo de ejecución. Se desarrolló un dashboard interactivo en Looker Studio para visualización de métricas operativas y se documentaron las mejores prácticas identificadas.
+\end{abstract}
+
+\begin{IEEEkeywords}
+BigQuery, particionamiento, clustering, optimización de consultas, análisis de costos, NYC Taxi dataset
+\end{IEEEkeywords}
+
+\section{Introducción}
+
+El procesamiento eficiente de grandes volúmenes de datos se ha convertido en un factor crítico para organizaciones que dependen de análisis en tiempo real \cite{example_ref}. Google BigQuery, como servicio de data warehouse serverless, ofrece capacidades escalables pero requiere optimización cuidadosa para controlar costos y mejorar rendimiento.
+
+Este estudio aborda la optimización sistemática de consultas sobre el dataset público NYC Taxi Trips, que contiene más de XX millones de registros de viajes de taxi en Nueva York. Los objetivos principales incluyen:
+
+\begin{itemize}
+\item Implementar estrategias de particionamiento y clustering
+\item Cuantificar mejoras en performance y reducción de costos
+\item Desarrollar un framework reproducible de optimización
+\item Crear visualizaciones interactivas para monitoreo operativo
+\end{itemize}
+
+\section{Metodología}
+
+\subsection{Configuración del Entorno}
+
+El proyecto se configuró en Google Cloud Platform con las siguientes especificaciones:
+
+\begin{itemize}
+\item \textbf{Proyecto}: [PROJECT\_ID]
+\item \textbf{Región}: US (para compatibilidad con datasets públicos)
+\item \textbf{Dataset}: Región US con configuración de TTL estándar
+\item \textbf{Permisos IAM}: bigquery.jobUser, bigquery.dataOwner
+\end{itemize}
+
+\subsection{Dataset de Referencia}
+
+Se utilizó el dataset público \texttt{bigquery-public-data.new\_york\_taxi\_trips.tlc\_yellow\_trips\_2022} con las siguientes características:
+
+\begin{table}[h]
+\centering
+\caption{Características del Dataset NYC Taxi Trips 2022}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Métrica} & \textbf{Valor} \\
+\midrule
+Registros totales & [XX,XXX,XXX] \\
+Tamaño aproximado & [XX.X] GB \\
+Período temporal & Enero - Diciembre 2022 \\
+Columnas principales & 18 campos \\
+Formato timestamps & DATETIME \\
+\bottomrule
+\end{tabular}
+\label{tab:dataset_stats}
+\end{table}
+
+\subsection{Estrategia de Optimización}
+
+\subsubsection{Particionamiento Temporal}
+Se implementó particionamiento por fecha utilizando la función \texttt{DATE()} sobre la columna de timestamp:
+
+\begin{lstlisting}[caption=Configuración de Particionamiento]
+CREATE TABLE `proyecto.dataset.tabla_optimizada`
+PARTITION BY DATE(pickup_datetime)
+CLUSTER BY payment_type, PULocationID
+AS SELECT * FROM `bigquery-public-data...`
+WHERE DATE(pickup_datetime) BETWEEN '2022-01-01' AND '2022-12-31'
+  AND fare_amount > 0
+  AND trip_distance > 0;
+\end{lstlisting}
+
+\subsubsection{Clustering por Columnas Clave}
+Se seleccionaron columnas de clustering basadas en patrones de consulta típicos:
+
+\begin{itemize}
+\item \textbf{payment\_type}: Filtrado frecuente por método de pago
+\item \textbf{PULocationID}: Análisis por zona de pickup
+\item \textbf{DOLocationID}: Análisis por zona de dropoff (tablas específicas)
+\end{itemize}
+
+\section{Implementación}
+
+\subsection{Tablas Derivadas Especializadas}
+
+Se crearon cuatro tablas optimizadas para casos de uso específicos:
+
+\subsubsection{Tabla Base (tabla\_base)}
+Limpieza y optimización general con filtros de calidad de datos.
+
+\subsubsection{Agregación Horaria (tabla\_hourly)}
+Pre-agregación para análisis de demanda temporal:
+
+\begin{lstlisting}[caption=Agregación por Hora]
+CREATE TABLE `proyecto.dataset.tabla_hourly`
+PARTITION BY DATE(pickup_date)
+CLUSTER BY PULocationID, pickup_hour
+AS
+SELECT 
+  DATE(pickup_datetime) as pickup_date,
+  EXTRACT(HOUR FROM pickup_datetime) as pickup_hour,
+  PULocationID,
+  COUNT(*) as trip_count,
+  AVG(fare_amount) as avg_fare,
+  AVG(trip_distance) as avg_distance
+FROM `proyecto.dataset.tabla_base`
+GROUP BY 1,2,3;
+\end{lstlisting}
+
+\subsubsection{Métricas Mensuales (tabla\_monthly)}
+KPIs agregados por mes para análisis ejecutivo.
+
+\subsubsection{Análisis de Propinas (tabla\_tips)}
+Segmentación por rangos de propinas para análisis de comportamiento.
+
+\subsection{Medición de Performance}
+
+Se implementó un framework de medición sistemática:
+
+\begin{lstlisting}[caption=Medición de Bytes Procesados]
+-- Desactivar cache para medición precisa
+SET @@dataset_id = 'proyecto.dataset';
+SET @@use_legacy_sql = false;
+SET @@use_cache = false;
+
+-- Query con estimación
+SELECT COUNT(*), AVG(fare_amount)
+FROM tabla_optimizada
+WHERE DATE(pickup_datetime) = '2022-06-15'
+  AND payment_type = 1;
+\end{lstlisting}
+
+\section{Resultados y Análisis}
+
+\subsection{Mejoras en Performance}
+
+Los resultados muestran mejoras significativas en múltiples métricas:
+
+\begin{table}[H]
+\centering
+\caption{Comparación de Performance: Tabla Original vs Optimizada}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+\textbf{Métrica} & \textbf{Original} & \textbf{Optimizada} & \textbf{Mejora} \\
+\midrule
+Bytes procesados & XX.X GB & XX.X GB & XX\% \\
+Tiempo ejecución & XX.X seg & XX.X seg & XX\% \\
+Costo estimado & \$XX.XX & \$XX.XX & XX\% \\
+\bottomrule
+\end{tabular}
+\label{tab:performance_comparison}
+\end{table}
+
+\subsection{Análisis de Costo por Tipo de Consulta}
+
+\begin{figure}[H]
+\centering
+% Incluir gráfico aquí cuando tengas los datos
+\caption{Reducción de costos por tipo de consulta}
+\label{fig:cost_reduction}
+\end{figure}
+
+\subsection{Efectividad del Clustering}
+
+El clustering mostró mayor efectividad en consultas que filtran por:
+\begin{itemize}
+\item Método de pago (payment\_type): Reducción promedio XX\%
+\item Zona geográfica (LocationID): Reducción promedio XX\%
+\item Combinación de ambos: Reducción promedio XX\%
+\end{itemize}
+
+\section{Dashboard y Visualización}
+
+Se desarrolló un dashboard interactivo en Looker Studio con las siguientes características:
+
+\subsection{Página Ejecutiva}
+\begin{itemize}
+\item KPIs principales: Total de viajes, ingresos, distancia promedio
+\item Serie temporal mensual de métricas clave
+\item Distribución por métodos de pago
+\item Análisis de propinas por rango
+\end{itemize}
+
+\subsection{Página Operativa}
+\begin{itemize}
+\item Heatmap de demanda por hora y zona
+\item Ranking de zonas por volumen
+\item Análisis de patrones temporales
+\item Métricas de calidad de datos
+\end{itemize}
+
+\section{Lecciones Aprendidas y Mejores Prácticas}
+
+\subsection{Particionamiento}
+\begin{itemize}
+\item Utilizar particionamiento por fecha para datos temporales
+\item Considerar TTL para gestión automática de datos históricos
+\item Validar rango de fechas antes de implementar
+\end{itemize}
+
+\subsection{Clustering}
+\begin{itemize}
+\item Seleccionar columnas basadas en patrones de consulta reales
+\item Máximo 4 columnas de clustering para eficiencia óptima
+\item Priorizar columnas con alta cardinalidad y distribución uniforme
+\end{itemize}
+
+\subsection{Monitoreo}
+\begin{itemize}
+\item Implementar alertas de costo por query
+\item Utilizar \texttt{INFORMATION\_SCHEMA} para monitoreo de particiones
+\item Documentar queries de referencia para comparación
+\end{itemize}
+
+\section{Trabajos Futuros}
+
+\begin{itemize}
+\item Implementación de materialización automática de vistas
+\item Análisis de patrones de acceso para optimización adicional
+\item Integración con herramientas de CI/CD para despliegue automatizado
+\item Evaluación de clustering dinámico basado en patrones de uso
+\end{itemize}
+
+\section{Conclusiones}
+
+Este estudio demuestra la efectividad de las estrategias de optimización sistemática en BigQuery. Las implementaciones de particionamiento y clustering resultaron en reducciones significativas de costos (XX\%) y mejoras en performance (XX\%). 
+
+El framework desarrollado es reproducible y escalable, proporcionando una base sólida para optimización de datasets similares. Las visualizaciones en Looker Studio facilitan el monitoreo continuo y la toma de decisiones basada en datos.
+
+Los resultados validan la importancia de la optimización proactiva en entornos de data warehouse cloud, donde los costos pueden escalarse rápidamente sin las estrategias adecuadas.
+
+\section*{Agradecimientos}
+
+Los autores agradecen a [Institución/Empresa] por proporcionar acceso a la infraestructura de Google Cloud Platform y el apoyo técnico durante el desarrollo de este proyecto.
+
+\begin{thebibliography}{00}
+\bibitem{b1} Google Cloud, ``BigQuery best practices for controlling costs,'' Google Cloud Documentation, 2024.
+\bibitem{b2} S. Lastname, F. Lastname, ``Optimizing large-scale data processing in cloud environments,'' in \textit{Proc. IEEE Conference on Data Engineering}, 2023, pp. 1-8.
+\bibitem{b3} NYC Taxi and Limousine Commission, ``TLC Trip Record Data,'' Official Dataset, 2024. [Online]. Available: https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page
+\bibitem{b4} A. Author, B. Author, ``Performance analysis of columnar storage in cloud data warehouses,'' \textit{IEEE Trans. Cloud Computing}, vol. 11, no. 3, pp. 1-12, 2023.
+\end{thebibliography}
+
+\appendix
+
+\section{Queries de Referencia}
+
+\begin{lstlisting}[caption=Query Base para Medición de Performance]
+-- Template para medición sistemática
+SET @@use_cache = false;
+
+SELECT 
+  COUNT(*) as total_trips,
+  AVG(fare_amount) as avg_fare,
+  SUM(fare_amount) as total_revenue
+FROM `proyecto.dataset.tabla_optimizada`
+WHERE DATE(pickup_datetime) BETWEEN @start_date AND @end_date
+  AND payment_type = @payment_type
+  AND PULocationID = @location_id;
+\end{lstlisting}
+
+\section{Configuración de Looker Studio}
+
+\begin{itemize}
+\item \textbf{Conector}: BigQuery nativo
+\item \textbf{Frecuencia de actualización}: Cada 4 horas
+\item \textbf{Filtros globales}: Rango de fechas, zona, método de pago
+\item \textbf{Campos calculados}: Buckets de propinas, categorías temporales
+\end{itemize}
+
+\end{document}
